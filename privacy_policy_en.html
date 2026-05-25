@@ -77,9 +77,10 @@
 </div>
 
 <div class="updated">
-  <strong>Last Updated:</strong> May 25, 2026<br>
-  <strong>Version:</strong> v1.0.1<br>
-  <strong>Key changes:</strong> Added Google Sign-In, Cloud Firestore sync, and in-app account deletion
+  <strong>Last Updated:</strong> May 26, 2026<br>
+  <strong>Version:</strong> v1.0.2<br>
+  <strong>Key changes:</strong> Profile editing (name/avatar), gallery image upload,
+  daily attendance records, unique username infrastructure (future ranking).
 </div>
 
 <p>
@@ -92,9 +93,10 @@
 <p>The App offers two usage modes:</p>
 
 <ul>
-  <li><strong>Guest mode:</strong> Use the App immediately without signing up or logging in. All gameplay data
-      (save files, player and team information, settings) is stored locally on your device and is not transmitted
-      to any external server.</li>
+  <li><strong>Guest mode:</strong> Use the App immediately without signing up or logging in. Gameplay data
+      (save files, players/teams, settings) is stored locally on your device. Additional data (profile,
+      attendance, club points) is stored in a separate on-device key-value store (SharedPreferences) and is not
+      transmitted to any external server.</li>
   <li><strong>Google Sign-In mode (optional):</strong> If you choose to sign in with your Google account, the
       data listed below is stored in the cloud (Google Cloud Firestore) so that certain data can be preserved
       across device changes or reinstallation.</li>
@@ -108,7 +110,7 @@
   </thead>
   <tbody>
     <tr>
-      <td>Email address, display name, profile photo URL, Google account unique identifier (UID)</td>
+      <td>Email address, display name (Google profile name), profile photo URL, Google account unique identifier (UID)</td>
       <td>When you sign in with Google</td>
       <td>Google Firebase Authentication</td>
       <td>Account identification and login</td>
@@ -119,13 +121,46 @@
       <td>Google Cloud Firestore</td>
       <td>Restoring club points after device change or reinstallation</td>
     </tr>
+    <tr>
+      <td>Daily attendance counter (0–4), last attendance date</td>
+      <td>When daily attendance reward is claimed</td>
+      <td>Google Cloud Firestore</td>
+      <td>Preventing duplicate claims and tracking 5-day cycle progress</td>
+    </tr>
   </tbody>
 </table>
 
 <p>None of the above is collected if you choose <strong>"Continue as Guest"</strong>. Google Sign-In is purely optional;
-all App features are available in Guest mode.</p>
+core App features are available in Guest mode.</p>
 
-<h3>1-2. Automatically Collected Data (all users)</h3>
+<h3>1-2. User-Provided Information (optional, new in v1.0.2)</h3>
+
+<table>
+  <thead>
+    <tr><th>Data Collected</th><th>When</th><th>Storage</th><th>Purpose</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Username (display name) — up to 20 characters width (10 Korean / 20 English)</td>
+      <td>My Account → Profile Edit</td>
+      <td>Google: Firestore / Guest: On-device</td>
+      <td>Personal identifier within the App</td>
+    </tr>
+    <tr>
+      <td>Avatar — choice of 15 built-in avatars OR gallery image (optional)</td>
+      <td>My Account → Profile Edit</td>
+      <td>Built-in avatar: synced to Google / Gallery image: <strong>device only</strong></td>
+      <td>Visual self-representation within the App</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Only information you explicitly enter is collected. Gallery images you select are <strong>copied only to a
+private app folder on your device</strong> and are never transmitted to Google Cloud or any external server.
+Because the username may be displayed to other users when ranking features are added in the future, please avoid
+using your real name, contact details, or sensitive personal information.</p>
+
+<h3>1-3. Automatically Collected Data (all users)</h3>
 
 <table>
   <thead>
@@ -147,14 +182,18 @@ all App features are available in Guest mode.</p>
   </tbody>
 </table>
 
-<p>We do <strong>not</strong> collect phone numbers, location data, contacts, camera, microphone, SMS, physical
-activity, or any other data beyond the items listed above, and the App does not request such permissions.</p>
+<p>We do <strong>not</strong> collect phone numbers, location data, contacts, microphone, SMS, physical activity, or
+any other data beyond the items listed above. However, for the optional gallery image feature we require the
+<strong>media permission</strong> (Android 13+ <code>READ_MEDIA_IMAGES</code>, iOS Photos), which only operates after
+you grant permission via the system dialog.</p>
 
 <h2>2. How We Use Information</h2>
 
 <ul>
   <li>Google account info: account identification, login processing, cross-device synchronization</li>
   <li>Club points data: restoring accumulated rewards after device change or reinstallation</li>
+  <li>Daily attendance records: preventing duplicate daily reward claims and tracking cycle progress</li>
+  <li>Username and avatar: in-app self-identification</li>
   <li>Crash reports: analyzing crash and error causes, fixing bugs, improving stability</li>
   <li>Installation ID: deduplicating crash reports, identifying issues on specific devices or OS versions</li>
 </ul>
@@ -172,9 +211,14 @@ those listed above.</p>
   </thead>
   <tbody>
     <tr>
-      <td>Google account info / Club points data</td>
+      <td>Google account info / Club points / Attendance records / Profile (username, built-in avatar index)</td>
       <td>Google Cloud Firestore (operated by Google LLC)</td>
       <td>Retained until you delete your account; deleted immediately upon account deletion</td>
+    </tr>
+    <tr>
+      <td>Username unique collection (lowercase name → your UID mapping)</td>
+      <td>Google Cloud Firestore (<code>usernames</code>)</td>
+      <td>Released immediately upon name change or account deletion (other users may reclaim the name)</td>
     </tr>
     <tr>
       <td>Crash reports</td>
@@ -186,6 +230,11 @@ those listed above.</p>
       <td>Local SQLite on your device</td>
       <td>Retained until you uninstall the App; cleared immediately upon uninstall</td>
     </tr>
+    <tr>
+      <td>Gallery-selected avatar image</td>
+      <td>Private app folder on your device</td>
+      <td>Removed immediately when you select a different image or uninstall the App</td>
+    </tr>
   </tbody>
 </table>
 
@@ -194,9 +243,12 @@ those listed above.</p>
 <ul>
   <li><strong>Transmission Security:</strong> All transmissions are encrypted via HTTPS/TLS 1.2 or higher.</li>
   <li><strong>Access Control:</strong> Firestore Security Rules restrict each user to accessing only their own
-      account data. The App developer can view only aggregated statistics through the Firebase console and does not
-      arbitrarily access individual user gameplay data.</li>
+      account data. The username unique collection (<code>usernames</code>) is readable by all users for duplicate
+      check purposes, but writable only by the owner. The App developer can view only aggregated statistics via the
+      Firebase console and does not arbitrarily access individual user gameplay data.</li>
   <li><strong>Storage Security:</strong> Google Cloud Firestore data is encrypted at rest.</li>
+  <li><strong>Local Images:</strong> Gallery-selected avatar images are stored only in the app's private folder and
+      cannot be accessed by other apps.</li>
 </ul>
 
 <h2>4. Third-Party Sharing &amp; Processors</h2>
@@ -216,8 +268,8 @@ behalf for the purposes described:</p>
     </tr>
     <tr>
       <td>Google LLC (Cloud Firestore)</td>
-      <td>Cloud storage and synchronization of club points</td>
-      <td>Account UID, club points balance, earned/spent history</td>
+      <td>Cloud storage and synchronization of club points, attendance records, profile</td>
+      <td>Account UID, club points, earned/spent history, attendance counter/date, username, avatar index</td>
     </tr>
     <tr>
       <td>Google LLC (Firebase Crashlytics)</td>
@@ -244,13 +296,18 @@ Policy will be updated and users notified through an in-app announcement.</p>
 <h3>6-1. In-App Actions</h3>
 
 <ul>
+  <li><strong>Profile Edit:</strong> [Menu &gt; My Account &gt; Profile Edit] lets you freely change your
+      username and avatar. Username may be changed once every 7 days; the previous name is released immediately
+      and may be claimed by other users.</li>
   <li><strong>Sign Out:</strong> [Menu &gt; My Account &gt; Sign Out] disconnects your Google account at any time.
       Your gameplay data on the device is preserved.</li>
   <li><strong>Delete Account (permanent):</strong> [Menu &gt; My Account &gt; Delete Account] immediately and
-      permanently deletes all cloud data linked to your Google account, including club points and earned/spent
-      history. This action cannot be undone.</li>
-  <li><strong>Uninstall the App:</strong> Uninstalling the App removes all on-device gameplay data. (Cloud data is
-      removed only via the "Delete Account" action.)</li>
+      permanently deletes all cloud data linked to your Google account (club points, attendance records, profile,
+      username unique mapping, etc.). This action cannot be undone.</li>
+  <li><strong>Reset Guest Data:</strong> [Menu &gt; My Account &gt; Reset Data] immediately deletes all local
+      Guest-mode data (club points, attendance, profile).</li>
+  <li><strong>Uninstall the App:</strong> Uninstalling the App removes all on-device gameplay data and local
+      avatar images. (Cloud data is removed only via the "Delete Account" action.)</li>
 </ul>
 
 <h3>6-2. Email Requests</h3>
